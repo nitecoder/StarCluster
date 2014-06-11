@@ -74,6 +74,8 @@ class SSHClient(object):
         self._transport = None
         self._progress_bar = None
         self._compress = compress
+        self._ssh_config = self.load_config()
+        
         if private_key:
             self._pkey = self.load_private_key(private_key, private_key_pass)
         elif not password:
@@ -81,6 +83,14 @@ class SSHClient(object):
         self._glob = SSHGlob(self)
         self.__last_status = None
         atexit.register(self.close)
+
+    def load_config(self):
+        conf = paramiko.config.SSHConfig()
+        #home = os.environ['HOME']
+        #with open('%s/.ssh/config' % home) as f:
+        with open(os.path.expanduser("~/.ssh/config")) as f:
+            conf.parse(f)
+        return conf
 
     def load_private_key(self, private_key, private_key_pass=None):
         # Use Private Key.
@@ -111,7 +121,7 @@ class SSHClient(object):
         log.debug("connecting to host %s on port %d as user %s" % (host, port,
                                                                    username))
         try:
-            sock = self._get_socket(host, port)
+            sock = self._get_socket_proxyaware(host, port)
             transport = paramiko.Transport(sock)
             transport.banner_timeout = timeout
         except socket.error:
@@ -161,6 +171,15 @@ class SSHClient(object):
         if self._transport:
             return self._transport.is_active()
         return False
+
+    def _get_socket_proxyaware(self, hostname, port):
+        config = self._ssh_config.lookup(hostname)
+        if config and 'proxycommand' in config:
+            proxycommand = config['proxycommand']
+            log.info("Using SSH ProxyCommand %s" % proxycommand)
+            return paramiko.proxy.ProxyCommand(proxycommand)
+        else:
+            return self._get_socket(hostname, port)
 
     def _get_socket(self, hostname, port):
         addrinfo = socket.getaddrinfo(hostname, port, socket.AF_UNSPEC,
