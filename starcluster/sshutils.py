@@ -88,7 +88,12 @@ class SSHClient(object):
         conf = paramiko.config.SSHConfig()
         #home = os.environ['HOME']
         #with open('%s/.ssh/config' % home) as f:
-        with open(os.path.expanduser("~/.ssh/config")) as f:
+        filename = os.path.expanduser("~/.ssh/config")
+        if not os.path.isfile(filename):
+            log.info("No ~/.ssh/config file found")
+            return None
+        
+        with open(filename) as f:
             conf.parse(f)
         return conf
 
@@ -173,7 +178,7 @@ class SSHClient(object):
         return False
 
     def _get_socket_proxyaware(self, hostname, port):
-        config = self._ssh_config.lookup(hostname)
+        config = self._ssh_config.lookup(hostname) if self._ssh_config else None
         if config and 'proxycommand' in config:
             proxycommand = config['proxycommand']
             log.info("Using SSH ProxyCommand %s" % proxycommand)
